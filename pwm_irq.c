@@ -1,66 +1,51 @@
-#include <stdio.h> //biblioteca padrão da linguagem C
-#include "pico/stdlib.h" //subconjunto central de bibliotecas do SDK Pico
-#include "pico/time.h" //biblioteca para gerenciamento de tempo
-#include "hardware/irq.h" //biblioteca para gerenciamento de interrupções
-#include "hardware/pwm.h" //biblioteca para controlar o hardware de PWM
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/pwm.h"
 
-#define LEDPin 12 //pino do LED conectado a GPIO como PWM
+#define SERVO_PIN 22
+#define PWM_FREQ 50.0f
 
-//tratamento da interrupção do PWM
-void wrapHandler(){ 
-    static int fade = 0; //nível de iluminação
-    static bool rise = true; //flag para elevar ou reduzir a iluminação
-    pwm_clear_irq(pwm_gpio_to_slice_num(LEDPin)); //resetar o flag de interrupção
-
-    if(rise){ //caso a iluminação seja elevada
-        fade++; //aumenta o nível de brilho
-        if(fade > 255){ //caso o fade seja maior que 255
-            fade = 255; //iguala fade a 255
-            rise = false; //muda o flag rise para redução do nível de iluminação
-        }
-    }
-    else{ //caso a iluminação seja reduzida
-        fade--; //reduz o nível de brilho
-        if(fade < 0){ //Icaso o fade seja menor que 0
-            fade = 0; //iguala fade a 0
-            rise = true; //muda o flag rise para elevação no nível de iluminação
-        }
-    }
-
-    pwm_set_gpio_level(LEDPin, fade * fade); //define o ciclo ativo (Ton) de forma quadrática, para acentuar a variação de luminosidade.
+void config_servo_pwm() {
+    gpio_set_function(SERVO_PIN, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(SERVO_PIN);
+    pwm_config config = pwm_get_default_config();
+    float clkdiv = 125000000.0f / (PWM_FREQ * 65535.0f);
+    pwm_config_set_clkdiv(&config, clkdiv);
+    pwm_config_set_wrap(&config, 65535);
+    pwm_init(slice_num, &config, true);
 }
 
-//Configuração do PWM com interrupção
-uint pwm_setup_irq(){
-
-    gpio_set_function(LEDPin, GPIO_FUNC_PWM); //habilitar o pino GPIO como PWM
-    uint sliceNum = pwm_gpio_to_slice_num(LEDPin); //obter o canal PWM da GPIO
-
-    pwm_clear_irq(sliceNum); //resetar o flag de interrupção para o slice
-    pwm_set_irq_enabled(sliceNum, true); //habilitar a interrupção de PWM para um dado slice
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, wrapHandler); //Definir um tipo de interrupção.
-    // Esta interrupção (PWM_IRQ_WRAP) é gerada quando um contador de um slice atinge seu valor de wrap
-    irq_set_enabled(PWM_IRQ_WRAP, true); //Habilitar ou desabilitar uma interrupção específica
-
-    pwm_config config = pwm_get_default_config(); //obtem a configuração padrão para o PWM
-    pwm_config_set_clkdiv(&config, 4.f); //define o divisor de clock do PWM
-    pwm_init(sliceNum, &config, true); //inicializa o PWM com as configurações do objeto
-
-    return sliceNum;
+void posicao_servo(uint us) {
+    uint slice_num = pwm_gpio_to_slice_num(SERVO_PIN);
+    uint16_t level = (us / 20000.0f) * 65535;
+    pwm_set_chan_level(slice_num, PWM_CHAN_A, level);
 }
 
-int main(){
+void movimento_suave(uint start_us, uint end_us) {
+    int step = (start_us < end_us) ? 5 : -5;
+    for(uint us = start_us; (step > 0) ? (us <= end_us) : (us >= end_us); us += step) {
+        posicao_servo(us);
+        sleep_ms(10);
+    }
+}
 
-    uint sliceNum = pwm_setup_irq(); //função que inicializa o PWM com interrupção por wrap
+int main() {
+    stdio_init_all();
+    config_servo_pwm();
 
-    while(1){
+    // Primeira sequência
+    posicao_servo(2400);  // 180 graus
+    sleep_ms(5000);
+    
+    posicao_servo(1470);  // 90 graus
+    sleep_ms(5000);
+    
+    posicao_servo(500);   // 0 graus
+    sleep_ms(5000);
 
-        printf("Interrupção do PWM ativa");
-        pwm_set_irq_enabled(sliceNum, true); //habilita a interrupção
-        sleep_ms(5000);
-        printf("Interrupção do  PWM desativada"); //desabilita a interrupção
-        pwm_set_irq_enabled(sliceNum, false);
-        sleep_ms(5000);
-
+    // Movimento suave contínuo
+    while(1) {
+        movimento_suave(500, 2400);   // 0 -> 180 graus
+        movimento_suave(2400, 500);   // 180 -> 0 graus
     }
 }
