@@ -6,7 +6,7 @@ Este projeto tem como objetivo a implementação de um controle de servomotor ut
 ## Demonstração em Vídeo
 Um vídeo demonstrando o funcionamento do projeto pode ser acessado no link abaixo:
 
-🔗 **[Inserir link do vídeo aqui]**
+🔗 **[https://drive.google.com/file/d/16ExSYrtJtqUIFdp0nA_Fsh1bpWSFm-0N/view?usp=drivesdk]**
 
 ## Requisitos
 Para a realização desta atividade, foram definidos os seguintes requisitos:
